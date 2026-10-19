@@ -56,7 +56,8 @@ public:
   /// instance gets it. Unconfigured, damaged, or built for different tiles
   /// than mjolnir's: the global is cleared and camera options fail
   /// (robustness.md R-7), never served from stale data. An unchanged file
-  /// that's already loaded is kept.
+  /// that's already loaded is kept. With an empty tile cache (tiles fetched as
+  /// needed), mjolnir.tile_url must contain the coverage's tile set id.
   static void LoadFromConfig(const boost::property_tree::ptree& config);
 
   /// Identifies a tile set: "osm<dataset_id>-b<build id>", from the tile

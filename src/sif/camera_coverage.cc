@@ -133,7 +133,17 @@ void CameraCoverage::LoadFromConfig(const boost::property_tree::ptree& config) {
 
     SetGlobal(nullptr); // until the new file is proven good
     auto loaded = Load(path);
-    if (tiles.empty() || loaded->build_id() != tiles) {
+    // With tiles fetched as needed the cache can start empty, so there's no
+    // tile to read. Then the tile URL has to name the tile set, as in
+    // https://tiles.example/osm190713103-bdad5/{tilePath}: each build is
+    // published under its own path, so tiles from another build can't arrive.
+    std::string effective = tiles;
+    if (effective.empty()) {
+      const auto url = config.get<std::string>("mjolnir.tile_url", "");
+      if (!url.empty() && url.find(loaded->build_id()) != std::string::npos)
+        effective = loaded->build_id();
+    }
+    if (effective.empty() || loaded->build_id() != effective) {
       LOG_ERROR("Camera coverage " + path + " was built for tiles '" + loaded->build_id() +
                 "', but these tiles are '" + tiles + "': camera options disabled");
       return;
