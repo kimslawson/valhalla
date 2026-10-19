@@ -16,12 +16,14 @@
 #include <valhalla/midgard/util.h>
 #include <valhalla/proto/info.pb.h>
 #include <valhalla/proto/options.pb.h>
+#include <valhalla/sif/camera_coverage.h>
 #include <valhalla/sif/costconstants.h>
 #include <valhalla/sif/edgelabel.h>
 #include <valhalla/thor/edgestatus.h>
 
 #include <boost/container/small_vector.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <unordered_map>
@@ -1251,6 +1253,46 @@ public:
     project_on_bss_connection_ = project_on_bss_connection;
   };
 
+  /**
+   * Outis camera coverage. True if a camera this request excludes covers the
+   * edge, unless that camera is exempt for this request (it covers an
+   * endpoint).
+   */
+  bool CameraExcluded(const baldr::GraphId& edgeid) const {
+    if (!camera_coverage_ || (!camera_exclude_all_ && camera_excluded_.empty()))
+      return false;
+    for (const auto cam : camera_coverage_->cameras_on(edgeid)) {
+      if (std::binary_search(camera_exempt_.begin(), camera_exempt_.end(), cam))
+        continue;
+      if (camera_exclude_all_ ||
+          std::binary_search(camera_excluded_.begin(), camera_excluded_.end(), cam))
+        return true;
+    }
+    return false;
+  }
+
+  /**
+   * Outis camera coverage. Seconds charged for moving from edge `from` onto
+   * edge `to`: the penalty for each camera covering `to` but not `from`, so a
+   * camera is charged once, when the route enters its coverage. Exempt
+   * cameras are free. Only ever adds cost, so A* stays admissible.
+   */
+  float CameraEntryPenalty(const baldr::GraphId& from, const baldr::GraphId& to) const {
+    if (!camera_coverage_ || camera_penalty_ <= 0.f)
+      return 0.f;
+    const auto to_cams = camera_coverage_->cameras_on(to);
+    if (to_cams.empty())
+      return 0.f;
+    const auto from_cams = camera_coverage_->cameras_on(from);
+    uint32_t entered = 0;
+    for (const auto cam : to_cams) {
+      if (!std::binary_search(camera_exempt_.begin(), camera_exempt_.end(), cam) &&
+          !std::binary_search(from_cams.begin(), from_cams.end(), cam))
+        ++entered;
+    }
+    return camera_penalty_ * entered;
+  }
+
 protected:
   /**
    * Returns the averaged factor for an edge fraction based on user provided custom factors
@@ -1430,6 +1472,13 @@ protected:
   std::unordered_map<baldr::GraphId, custom_cost_t> linear_cost_edges_;
   double min_linear_cost_factor_;
   bool has_allowed_linear_edges_{false};
+
+  // Outis camera coverage, set only when the request uses a camera option.
+  std::shared_ptr<const CameraCoverage> camera_coverage_;
+  float camera_penalty_{0.f};
+  bool camera_exclude_all_{false};
+  std::vector<uint32_t> camera_excluded_; // sorted counting indices
+  std::vector<uint32_t> camera_exempt_;   // sorted counting indices
 
   /**
    * Get the base transition costs (and ferry factor) from the costing options.
@@ -1660,6 +1709,9 @@ struct BaseCostingOptionsConfig {
   ranged_default_t<float> length_;
   ranged_default_t<float> weight_;
   ranged_default_t<float> use_distance_;
+
+  // Outis: seconds charged on entering a camera's coverage
+  ranged_default_t<float> camera_penalty_;
 };
 
 /**

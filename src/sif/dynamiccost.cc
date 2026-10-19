@@ -180,7 +180,7 @@ BaseCostingOptionsConfig::BaseCostingOptionsConfig()
       exclude_cash_only_tolls_(false), include_hot_{false}, include_hov2_{false},
       include_hov3_{false}, height_{0.f, kDefaultHeight, 10.0f}, width_{0.f, kDefaultWidth, 10.0f},
       length_{0.f, kDefaultLength, 50.0f}, weight_{0.f, kDefaultWeight, 100.0f},
-      use_distance_{0.f, kDefaultUseDistance, 1.f} {
+      use_distance_{0.f, kDefaultUseDistance, 1.f}, camera_penalty_{0.f, 0.f, kMaxPenalty} {
 }
 
 DynamicCost::DynamicCost(const Costing& costing,
@@ -225,6 +225,26 @@ DynamicCost::DynamicCost(const Costing& costing,
   }
 
   SetCostFactorEdges(costing.options());
+
+  // Outis camera coverage. A request that asks for camera avoidance without
+  // coverage loaded must fail, never quietly route as if no camera existed
+  // (robustness.md R-7).
+  const auto& options = costing.options();
+  camera_penalty_ = options.camera_penalty();
+  camera_exclude_all_ = options.camera_exclude_all();
+  if (camera_penalty_ > 0.f || camera_exclude_all_ || options.camera_exclude_size() > 0) {
+    camera_coverage_ = CameraCoverage::Global();
+    if (!camera_coverage_)
+      throw std::runtime_error("camera coverage unavailable: camera options can't be honored");
+    for (const auto packed_id : options.camera_exclude()) {
+      const auto index = camera_coverage_->index_of(packed_id);
+      if (index >= 0)
+        camera_excluded_.push_back(static_cast<uint32_t>(index));
+    }
+    camera_exempt_.assign(options.camera_exempt().begin(), options.camera_exempt().end());
+    std::sort(camera_excluded_.begin(), camera_excluded_.end());
+    std::sort(camera_exempt_.begin(), camera_exempt_.end());
+  }
 }
 
 DynamicCost::~DynamicCost() {
@@ -586,6 +606,24 @@ void ParseBaseCostOptions(const rapidjson::Value& json,
 
   JSON_PBF_DEFAULT_V2(co, cfg.exclude_cash_only_tolls_, json, "/exclude_cash_only_tolls",
                       exclude_cash_only_tolls);
+
+  // Outis camera coverage. camera_exclude is "none", "all", or a list of
+  // packed OSM ids. Any other string excludes all: when the request is
+  // ambiguous, avoid more cameras, not fewer.
+  JSON_PBF_RANGED_DEFAULT(co, cfg.camera_penalty_, json, "/camera_penalty", camera_penalty,
+                          warnings);
+  if (auto camera_exclude = rapidjson::get_child_optional(json, "/camera_exclude")) {
+    co->clear_camera_exclude();
+    co->set_camera_exclude_all(false);
+    if (camera_exclude->IsString()) {
+      co->set_camera_exclude_all(std::string(camera_exclude->GetString()) != "none");
+    } else if (camera_exclude->IsArray()) {
+      for (const auto& id : camera_exclude->GetArray()) {
+        if (id.IsUint64())
+          co->add_camera_exclude(id.GetUint64());
+      }
+    }
+  }
 
   // service_penalty
   JSON_PBF_RANGED_DEFAULT(co, cfg.service_penalty_, json, "/service_penalty", service_penalty,
