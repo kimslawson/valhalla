@@ -235,7 +235,7 @@ DynamicCost::DynamicCost(const Costing& costing,
   if (camera_penalty_ > 0.f || camera_exclude_all_ || options.camera_exclude_size() > 0) {
     camera_coverage_ = CameraCoverage::Global();
     if (!camera_coverage_)
-      throw std::runtime_error("camera coverage unavailable: camera options can't be honored");
+      throw valhalla_exception_t{178};
     for (const auto packed_id : options.camera_exclude()) {
       const auto index = camera_coverage_->index_of(packed_id);
       if (index >= 0)

@@ -156,6 +156,8 @@ void loki_worker_t::parse_costing(Api& api, bool allow_none) {
     else {
       mode_costing = factory.CreateModeCosting(options, mode);
     }
+  } catch (const valhalla_exception_t&) {
+    throw; // already specific, e.g. 178 camera coverage unavailable
   } catch (const std::runtime_error&) { throw valhalla_exception_t{125, "'" + costing_str + "'"}; }
 
   if (options.exclude_polygons_size()) {

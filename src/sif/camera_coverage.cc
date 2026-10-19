@@ -1,10 +1,12 @@
 #include "sif/camera_coverage.h"
+#include "baldr/graphreader.h"
 #include "midgard/logging.h"
 
 #include <boost/property_tree/ptree.hpp>
 
 #include <algorithm>
 #include <bit>
+#include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <iterator>
@@ -115,10 +117,11 @@ void CameraCoverage::LoadFromConfig(const boost::property_tree::ptree& config) {
     return;
   try {
     auto coverage = Load(path);
-    const auto expected = config.get<std::string>("thor.camera_coverage_build_id", "");
-    if (!expected.empty() && coverage->build_id() != expected) {
+    baldr::GraphReader reader(config.get_child("mjolnir"));
+    const auto tiles = TilesetId(reader);
+    if (tiles.empty() || coverage->build_id() != tiles) {
       LOG_ERROR("Camera coverage " + path + " was built for tiles '" + coverage->build_id() +
-                "', not '" + expected + "': camera options disabled");
+                "', but these tiles are '" + tiles + "': camera options disabled");
       return;
     }
     SetGlobal(coverage);
@@ -127,6 +130,20 @@ void CameraCoverage::LoadFromConfig(const boost::property_tree::ptree& config) {
   } catch (const std::exception& e) {
     LOG_ERROR(std::string("Camera coverage not loaded, camera options disabled: ") + e.what());
   }
+}
+
+std::string CameraCoverage::TilesetId(baldr::GraphReader& reader) {
+  for (const auto& tile_id : reader.GetTileSet()) {
+    auto tile = reader.GetGraphTile(tile_id);
+    if (!tile)
+      continue;
+    char buf[48];
+    std::snprintf(buf, sizeof(buf), "osm%llu-b%04x",
+                  static_cast<unsigned long long>(tile->header()->dataset_id()),
+                  static_cast<unsigned>(tile->header()->build_id()));
+    return buf;
+  }
+  return "";
 }
 
 CameraCoverage::Span CameraCoverage::cameras_on(const baldr::GraphId& edge) const {

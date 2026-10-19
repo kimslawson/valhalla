@@ -3,6 +3,11 @@
 //
 //   {"id":123456789,"coords":[[lon,lat],[lon,lat],...]}
 //
+// The first line identifies the tile set, so data built from these edges can
+// be checked against the tiles it's used with:
+//
+//   {"tileset_id":"osm<dataset_id>-b<build id>"}
+//
 // Useful for attaching external per-edge data keyed by GraphId, such as an
 // edge penalty sidecar built from points of interest near the road.
 
@@ -11,6 +16,7 @@
 #include "baldr/graphreader.h"
 #include "baldr/tilehierarchy.h"
 #include "midgard/logging.h"
+#include "sif/camera_coverage.h"
 
 #include <boost/property_tree/ptree.hpp>
 #include <cxxopts.hpp>
@@ -71,6 +77,12 @@ int main(int argc, char* argv[]) {
   }
   std::ostream& out = output.empty() ? std::cout : file;
   GraphReader reader(config.get_child("mjolnir"));
+  const auto tileset_id = valhalla::sif::CameraCoverage::TilesetId(reader);
+  if (tileset_id.empty()) {
+    std::cerr << "No tiles found" << std::endl;
+    return EXIT_FAILURE;
+  }
+  out << "{\"tileset_id\":\"" << tileset_id << "\"}\n";
 
   uint64_t exported = 0;
   char buf[64];

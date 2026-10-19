@@ -4,6 +4,12 @@
 
 #include <boost/property_tree/ptree_fwd.hpp>
 
+namespace valhalla {
+namespace baldr {
+class GraphReader;
+}
+} // namespace valhalla
+
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -46,9 +52,14 @@ public:
   static void SetGlobal(std::shared_ptr<const CameraCoverage> coverage);
 
   /// Loads thor.camera_coverage once, if configured. If the file is damaged,
-  /// or thor.camera_coverage_build_id is set and doesn't match, nothing is
+  /// or was built for a different tile set than mjolnir's tiles, nothing is
   /// loaded and camera options fail (robustness.md R-7).
   static void LoadFromConfig(const boost::property_tree::ptree& config);
+
+  /// Identifies a tile set: "osm<dataset_id>-b<build id>", from the tile
+  /// headers. dataset_id is the newest OSM changeset in the source data; the
+  /// build id hashes every tile's checksum. Empty if no tile is found.
+  static std::string TilesetId(baldr::GraphReader& reader);
 
   Span cameras_on(const baldr::GraphId& edge) const;
 
