@@ -320,6 +320,15 @@ void DynamicCost::SetAllowTransitConnections(const bool allow) {
 
 // Sets the flag indicating whether destination only edges are allowed.
 void DynamicCost::set_allow_destination_only(const bool allow) {
+  // Outis: in camera modes, a relaxed second pass can't newly allow
+  // destination-only roads (private, destination, customers...). With cameras
+  // excluded, a private road would otherwise become the cheapest way past a
+  // camera on that pass (robustness.md R-1, R-2, S2). The first pass keeps
+  // Valhalla's own setting, which one-direction searches need to reach a
+  // destination on such a road. The client rejects any camera-mode route
+  // that still passes through one (sim/outis_sim/modes.py).
+  if (camera_coverage_ && pass_ > 0 && allow && !allow_destination_only_)
+    return;
   allow_destination_only_ = allow;
 }
 
