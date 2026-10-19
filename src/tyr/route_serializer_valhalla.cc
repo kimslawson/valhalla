@@ -6,6 +6,7 @@
 #include "proto_conversions.h"
 #include "tyr/serializers.h"
 
+#include <algorithm>
 #include <vector>
 
 using namespace valhalla;
@@ -259,7 +260,16 @@ void legs(valhalla::Api& api, int route_index, rapidjson::writer_wrapper_t& writ
   const auto& directions_legs = api.directions().routes(route_index).legs();
   unsigned int length_prec = api.options().units() == Options::miles ? 4 : 3;
   auto trip_leg_itr = api.mutable_trip()->mutable_routes(route_index)->mutable_legs()->begin();
+  // Outis: with "filters": {"attributes": ["edge.id"], "action": "include"},
+  // each leg also lists the edges it travels (GraphId, destination-only,
+  // unpaved), so a client can score and check a route without re-deriving its
+  // edges from the shape, which can drop very short edges.
+  const auto& opts = api.options();
+  const bool edge_ids = opts.filter_action() == FilterAction::include &&
+                        std::find(opts.filter_attributes().begin(), opts.filter_attributes().end(),
+                                  "edge.id") != opts.filter_attributes().end();
   for (const auto& directions_leg : directions_legs) {
+    const valhalla::TripLeg& trip_leg = *trip_leg_itr;
     valhalla::odin::EnhancedTripLeg etp(*trip_leg_itr);
     writer.start_object(); // leg
     bool has_time_restrictions = false;
@@ -668,6 +678,20 @@ void legs(valhalla::Api& api, int route_index, rapidjson::writer_wrapper_t& writ
     writer.end_object();
 
     writer("shape", directions_leg.shape());
+
+    if (edge_ids) {
+      writer.start_array("edges");
+      for (const auto& node : trip_leg.node()) {
+        if (!node.has_edge())
+          continue;
+        writer.start_object();
+        writer("id", static_cast<uint64_t>(node.edge().id()));
+        writer("destination_only", node.edge().destination_only());
+        writer("unpaved", node.edge().unpaved());
+        writer.end_object();
+      }
+      writer.end_array();
+    }
 
     writer.end_object(); // leg
   }
