@@ -150,10 +150,12 @@ void loki_worker_t::parse_costing(Api& api, bool allow_none) {
     // For the begin and end of multimodal we expect you to be walking
     if (options.costing_type() == Costing::multimodal) {
       options.set_costing_type(Costing::pedestrian);
+      sif::CameraCoverage::SetCurrent(camera_coverage_);
       mode_costing = factory.CreateModeCosting(options, mode);
       options.set_costing_type(Costing::multimodal);
     } // otherwise use the provided costing
     else {
+      sif::CameraCoverage::SetCurrent(camera_coverage_);
       mode_costing = factory.CreateModeCosting(options, mode);
     }
   } catch (const valhalla_exception_t&) {
@@ -311,7 +313,7 @@ loki_worker_t::loki_worker_t(const boost::property_tree::ptree& config,
       candidate_query_(*reader,
                        TileHierarchy::levels().back().tiles.TileSize() / 10.0f,
                        TileHierarchy::levels().back().tiles.TileSize() / 10.0f) {
-  sif::CameraCoverage::LoadFromConfig(config);
+  camera_coverage_ = sif::CameraCoverage::LoadFromConfig(config);
 
   bbox_intersection_.reserve(1e5); // TODO: how much memory should we reserve for this?
 

@@ -1,6 +1,7 @@
 #ifndef __VALHALLA_LOKI_SERVICE_H__
 #define __VALHALLA_LOKI_SERVICE_H__
 
+#include <valhalla/sif/camera_coverage.h>
 #include <valhalla/baldr/connectivity_map.h>
 #include <valhalla/baldr/graphreader.h>
 #include <valhalla/exceptions.h>
@@ -125,6 +126,9 @@ protected:
   ZoomConfig min_zoom_road_class_;
   std::string mvt_cache_dir_;
   uint32_t mvt_cache_min_zoom_;
+
+  // Outis camera coverage for this worker's config (robustness.md R-7).
+  std::shared_ptr<const sif::CameraCoverage> camera_coverage_;
 
 private:
   std::string service_name() const override {

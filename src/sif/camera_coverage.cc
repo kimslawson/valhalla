@@ -8,10 +8,8 @@
 #include <bit>
 #include <cstdio>
 #include <cstring>
-#include <filesystem>
 #include <fstream>
 #include <iterator>
-#include <mutex>
 #include <stdexcept>
 
 namespace valhalla {
@@ -24,8 +22,8 @@ namespace {
 constexpr char kMagic[8] = {'O', 'U', 'T', 'I', 'S', 'C', 'O', 'V'};
 constexpr uint16_t kVersion = 1;
 
-std::mutex global_mutex;
-std::shared_ptr<const CameraCoverage> global_coverage;
+// The coverage of the worker building costing on this thread (see SetCurrent).
+thread_local std::shared_ptr<const CameraCoverage> current_coverage;
 
 // Reads fixed-size values off a byte buffer, failing loudly past the end.
 struct Reader {
@@ -102,37 +100,23 @@ std::shared_ptr<const CameraCoverage> CameraCoverage::Load(const std::string& pa
   return coverage;
 }
 
-std::shared_ptr<const CameraCoverage> CameraCoverage::Global() {
-  std::lock_guard<std::mutex> lock(global_mutex);
-  return global_coverage;
+std::shared_ptr<const CameraCoverage> CameraCoverage::Current() {
+  return current_coverage;
 }
 
-void CameraCoverage::SetGlobal(std::shared_ptr<const CameraCoverage> coverage) {
-  std::lock_guard<std::mutex> lock(global_mutex);
-  global_coverage = std::move(coverage);
+void CameraCoverage::SetCurrent(std::shared_ptr<const CameraCoverage> coverage) {
+  current_coverage = std::move(coverage);
 }
 
-void CameraCoverage::LoadFromConfig(const boost::property_tree::ptree& config) {
+std::shared_ptr<const CameraCoverage>
+CameraCoverage::LoadFromConfig(const boost::property_tree::ptree& config) {
   const auto path = config.get<std::string>("thor.camera_coverage", "");
-  if (path.empty()) {
-    SetGlobal(nullptr);
-    return;
-  }
+  if (path.empty())
+    return nullptr;
   try {
-    std::error_code ec;
-    const auto size = std::filesystem::file_size(path, ec);
-    const auto mtime = std::filesystem::last_write_time(path, ec);
-    const std::string stamp =
-        ec ? "" : std::to_string(size) + ":" + std::to_string(static_cast<long long>(mtime.time_since_epoch().count()));
     baldr::GraphReader reader(config.get_child("mjolnir"));
     const auto tiles = TilesetId(reader);
-    if (const auto current = Global();
-        current && !stamp.empty() && current->source_ == path && current->stamp_ == stamp &&
-        current->tiles_ == tiles)
-      return;
-
-    SetGlobal(nullptr); // until the new file is proven good
-    auto loaded = Load(path);
+    auto coverage = Load(path);
     // With tiles fetched as needed the cache can start empty, so there's no
     // tile to read. Then the tile URL has to name the tile set, as in
     // https://tiles.example/osm190713103-bdad5/{tilePath}: each build is
@@ -140,23 +124,20 @@ void CameraCoverage::LoadFromConfig(const boost::property_tree::ptree& config) {
     std::string effective = tiles;
     if (effective.empty()) {
       const auto url = config.get<std::string>("mjolnir.tile_url", "");
-      if (!url.empty() && url.find(loaded->build_id()) != std::string::npos)
-        effective = loaded->build_id();
+      if (!url.empty() && url.find(coverage->build_id()) != std::string::npos)
+        effective = coverage->build_id();
     }
-    if (effective.empty() || loaded->build_id() != effective) {
-      LOG_ERROR("Camera coverage " + path + " was built for tiles '" + loaded->build_id() +
+    if (effective.empty() || coverage->build_id() != effective) {
+      LOG_ERROR("Camera coverage " + path + " was built for tiles '" + coverage->build_id() +
                 "', but these tiles are '" + tiles + "': camera options disabled");
-      return;
+      return nullptr;
     }
-    auto coverage = std::const_pointer_cast<CameraCoverage>(loaded);
-    coverage->source_ = path;
-    coverage->stamp_ = stamp;
-    coverage->tiles_ = tiles;
-    SetGlobal(coverage);
     LOG_INFO("Loaded camera coverage " + path + ": " + std::to_string(coverage->camera_count()) +
              " cameras, build " + coverage->build_id());
+    return coverage;
   } catch (const std::exception& e) {
     LOG_ERROR(std::string("Camera coverage not loaded, camera options disabled: ") + e.what());
+    return nullptr;
   }
 }
 

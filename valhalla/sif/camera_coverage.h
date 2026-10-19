@@ -21,7 +21,7 @@ namespace sif {
 /**
  * Which cameras cover each directed edge, read from an Outis coverage.bin
  * (format documented in the Outis pipeline, outis_pipeline/coverage_bin.py).
- * Loaded once at startup and shared read-only by every request.
+ * Loaded by each worker at startup and shared read-only by its requests.
  *
  * Cameras are identified by counting index: cameras that count as one share
  * an index, so a route entering their coverage is charged once.
@@ -47,18 +47,18 @@ public:
   /// missing or damaged: a half-read file must never be used.
   static std::shared_ptr<const CameraCoverage> Load(const std::string& path);
 
-  /// The coverage loaded at startup, or nullptr if none.
-  static std::shared_ptr<const CameraCoverage> Global();
-  static void SetGlobal(std::shared_ptr<const CameraCoverage> coverage);
+  /// Loads thor.camera_coverage and checks it against mjolnir's tiles. Returns
+  /// nullptr when it's unconfigured, damaged, or built for different tiles,
+  /// and camera options then fail (robustness.md R-7). With an empty tile
+  /// cache (tiles fetched as needed), mjolnir.tile_url must contain the
+  /// coverage's tile set id. Each worker keeps its own result, so every router
+  /// instance uses the coverage from its own config.
+  static std::shared_ptr<const CameraCoverage> LoadFromConfig(const boost::property_tree::ptree& config);
 
-  /// Makes the global coverage match thor.camera_coverage. Called whenever a
-  /// worker starts, so an app that downloads new camera data and starts a new
-  /// instance gets it. Unconfigured, damaged, or built for different tiles
-  /// than mjolnir's: the global is cleared and camera options fail
-  /// (robustness.md R-7), never served from stale data. An unchanged file
-  /// that's already loaded is kept. With an empty tile cache (tiles fetched as
-  /// needed), mjolnir.tile_url must contain the coverage's tile set id.
-  static void LoadFromConfig(const boost::property_tree::ptree& config);
+  /// The coverage for costing built on this thread. Workers set it to their
+  /// own coverage just before creating costing; DynamicCost reads it.
+  static std::shared_ptr<const CameraCoverage> Current();
+  static void SetCurrent(std::shared_ptr<const CameraCoverage> coverage);
 
   /// Identifies a tile set: "osm<dataset_id>-b<build id>", from the tile
   /// headers. dataset_id is the newest OSM changeset in the source data; the
@@ -82,9 +82,6 @@ public:
   int64_t index_of(uint64_t packed_id) const;
 
 private:
-  std::string source_;     // path it was loaded from
-  std::string stamp_;      // file size and modification time when loaded
-  std::string tiles_;      // tile set it was checked against
   std::string build_id_;
   std::vector<uint64_t> objects_;
   std::vector<uint64_t> graph_ids_;

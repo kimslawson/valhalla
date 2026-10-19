@@ -1,6 +1,7 @@
 #ifndef __VALHALLA_THOR_SERVICE_H__
 #define __VALHALLA_THOR_SERVICE_H__
 
+#include <valhalla/sif/camera_coverage.h>
 #include <valhalla/baldr/attributes_controller.h>
 #include <valhalla/baldr/graphreader.h>
 #include <valhalla/exceptions.h>
@@ -139,6 +140,9 @@ protected:
   hierarchy_limits_config_t hierarchy_limits_config_astar;
   hierarchy_limits_config_t hierarchy_limits_config_bidirectional_astar;
   hierarchy_limits_config_t hierarchy_limits_config_costmatrix;
+
+  // Outis camera coverage for this worker's config (robustness.md R-7).
+  std::shared_ptr<const sif::CameraCoverage> camera_coverage_;
 
 private:
   std::string service_name() const override {

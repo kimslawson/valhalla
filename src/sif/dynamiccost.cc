@@ -233,7 +233,7 @@ DynamicCost::DynamicCost(const Costing& costing,
   camera_penalty_ = options.camera_penalty();
   camera_exclude_all_ = options.camera_exclude_all();
   if (camera_penalty_ > 0.f || camera_exclude_all_ || options.camera_exclude_size() > 0) {
-    camera_coverage_ = CameraCoverage::Global();
+    camera_coverage_ = CameraCoverage::Current();
     if (!camera_coverage_)
       throw valhalla_exception_t{178};
     for (const auto packed_id : options.camera_exclude()) {

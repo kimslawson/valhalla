@@ -177,8 +177,8 @@ namespace {
 // view can still leave it. Every location counts, not just the first and
 // last, so via points work the same way. The client warns about these
 // cameras before departure.
-void exempt_location_cameras(valhalla::Options& options) {
-  const auto coverage = valhalla::sif::CameraCoverage::Global();
+void exempt_location_cameras(valhalla::Options& options,
+                             const std::shared_ptr<const valhalla::sif::CameraCoverage>& coverage) {
   if (!coverage)
     return;
   auto costing = options.mutable_costings()->find(options.costing_type());
@@ -246,7 +246,7 @@ void thor_worker_t::route(Api& request) {
   auto& options = *request.mutable_options();
   adjust_locations(request);
   controller = AttributesController(options);
-  exempt_location_cameras(options);
+  exempt_location_cameras(options, camera_coverage_);
 
   auto costing = parse_costing(request);
 

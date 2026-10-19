@@ -71,7 +71,7 @@ thor_worker_t::thor_worker_t(const boost::property_tree::ptree& config,
       matcher_factory(config, reader), controller{},
       allow_hierarchy_limits_modifications(
           config.get<bool>("service_limits.hierarchy_limits.allow_modification", false)) {
-  sif::CameraCoverage::LoadFromConfig(config);
+  camera_coverage_ = sif::CameraCoverage::LoadFromConfig(config);
 
   // Select the matrix algorithm based on the conf file (defaults to
   // select_optimal if not present)
@@ -231,6 +231,7 @@ std::string thor_worker_t::parse_costing(const Api& request) {
   const auto& options = request.options();
   auto costing = options.costing_type();
   auto costing_str = Costing_Enum_Name(costing);
+  sif::CameraCoverage::SetCurrent(camera_coverage_);
   mode_costing = factory.CreateModeCosting(options, mode);
 
   return costing_str;
