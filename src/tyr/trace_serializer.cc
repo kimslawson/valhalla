@@ -193,6 +193,9 @@ void serialize_edges(const AttributesController& controller,
       if (controller(kEdgeUnpaved)) {
         writer("unpaved", edge.unpaved());
       }
+      if (controller(kEdgeDestinationOnly)) {
+        writer("destination_only", edge.destination_only());
+      }
       if (controller(kEdgeToll)) {
         writer("toll", edge.toll());
       }
