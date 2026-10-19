@@ -1,9 +1,11 @@
+#include "sif/camera_coverage.h"
 #include "baldr/attributes_controller.h"
 #include "midgard/logging.h"
 #include "proto/common.pb.h"
 #include "thor/triplegbuilder.h"
 #include "thor/worker.h"
 
+#include <set>
 #include <cstdint>
 
 using namespace valhalla;
@@ -168,6 +170,37 @@ opposing) { loc.mutable_correlation()->mutable_edges()->SwapElements(i, loc.path
 
 } // namespace
 
+namespace {
+
+// Outis: cameras covering any user-chosen location's correlated edges are
+// exempt for this request, so a trip that starts or ends inside a camera's
+// view can still leave it. Every location counts, not just the first and
+// last, so via points work the same way. The client warns about these
+// cameras before departure.
+void exempt_location_cameras(valhalla::Options& options) {
+  const auto coverage = valhalla::sif::CameraCoverage::Global();
+  if (!coverage)
+    return;
+  auto costing = options.mutable_costings()->find(options.costing_type());
+  if (costing == options.mutable_costings()->end())
+    return;
+  auto* co = costing->second.mutable_options();
+  if (co->camera_penalty() <= 0.f && !co->camera_exclude_all() && co->camera_exclude_size() == 0)
+    return;
+  std::set<uint32_t> exempt(co->camera_exempt().begin(), co->camera_exempt().end());
+  for (const auto& location : options.locations()) {
+    for (const auto& edge : location.correlation().edges()) {
+      for (const auto cam : coverage->cameras_on(valhalla::baldr::GraphId(edge.graph_id())))
+        exempt.insert(cam);
+    }
+  }
+  co->clear_camera_exempt();
+  for (const auto cam : exempt)
+    co->add_camera_exempt(cam);
+}
+
+} // namespace
+
 namespace valhalla {
 namespace thor {
 
@@ -213,6 +246,7 @@ void thor_worker_t::route(Api& request) {
   auto& options = *request.mutable_options();
   adjust_locations(request);
   controller = AttributesController(options);
+  exempt_location_cameras(options);
 
   auto costing = parse_costing(request);
 
