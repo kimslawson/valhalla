@@ -407,6 +407,10 @@ bool AutoCost::Allowed(const baldr::DirectedEdge* edge,
                        uint8_t& restriction_idx,
                        uint8_t& destonly_access_restr_mask,
                        bool* edge_destonly) const {
+  // Outis: an excluded camera's coverage is refused before anything can allow it.
+  if (CameraExcluded(edgeid)) {
+    return false;
+  }
   // the user asked for this edge to be usable no matter what
   if (AllowedLinearFeature(edgeid)) {
     return true;
@@ -445,6 +449,10 @@ bool AutoCost::AllowedReverse(const baldr::DirectedEdge* edge,
                               uint8_t& restriction_idx,
                               uint8_t& destonly_access_restr_mask,
                               bool* edge_destonly) const {
+  // Outis: an excluded camera's coverage is refused before anything can allow it.
+  if (CameraExcluded(opp_edgeid)) {
+    return false;
+  }
   // the user asked for this edge to be usable no matter what
   if (AllowedLinearFeature(opp_edgeid)) {
     return true;
@@ -565,7 +573,7 @@ Cost AutoCost::EdgeCost(const baldr::DirectedEdge* edge,
 Cost AutoCost::TransitionCost(const baldr::DirectedEdge* edge,
                               const baldr::NodeInfo* node,
                               const EdgeLabel& pred,
-                              const graph_tile_ptr& /*tile*/,
+                              const graph_tile_ptr& tile,
                               const std::function<LimitedGraphReader()>& /*reader_getter*/,
                               const bool edge_destonly) const {
   // Get the transition cost for country crossing, ferry, gate, toll booth,
@@ -625,6 +633,14 @@ Cost AutoCost::TransitionCost(const baldr::DirectedEdge* edge,
   // Account for the user preferring distance
   c.cost *= inv_distance_factor_;
 
+  // Outis: cameras covering this edge but not the one we came from. Cost
+  // only, never time: the route doesn't get slower, just less preferred.
+  if (camera_coverage_) {
+    baldr::GraphId edgeid = tile->id();
+    edgeid.set_id(static_cast<uint32_t>(edge - tile->directededge(0)));
+    c.cost += CameraEntryPenalty(pred.edgeid(), edgeid);
+  }
+
   return c;
 }
 
@@ -637,7 +653,7 @@ Cost AutoCost::TransitionCostReverse(const uint32_t idx,
                                      const baldr::DirectedEdge* pred,
                                      const baldr::DirectedEdge* edge,
                                      const EdgeLabel& pred_label,
-                                     const graph_tile_ptr& /*tile*/,
+                                     const graph_tile_ptr& tile,
                                      const std::function<LimitedGraphReader()>& /*reader_getter*/,
                                      const bool has_measured_speed,
                                      const InternalTurn internal_turn,
@@ -696,6 +712,16 @@ Cost AutoCost::TransitionCostReverse(const uint32_t idx,
 
   // Account for the user preferring distance
   c.cost *= inv_distance_factor_;
+
+  // Outis: the route runs from `pred` (the edge being added, earlier on the
+  // route) onto pred_label's edge (later), so charge the cameras on the later
+  // edge that aren't on the earlier one: the same amount the forward search
+  // charges for this transition. `tile` holds `pred`.
+  if (camera_coverage_) {
+    baldr::GraphId earlier = tile->id();
+    earlier.set_id(static_cast<uint32_t>(pred - tile->directededge(0)));
+    c.cost += CameraEntryPenalty(earlier, pred_label.edgeid());
+  }
 
   return c;
 }
