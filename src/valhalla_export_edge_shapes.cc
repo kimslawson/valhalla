@@ -86,7 +86,9 @@ int main(int argc, char* argv[]) {
         const DirectedEdge* edge = tile->directededge(i);
         if (edge->is_shortcut() && !shortcuts)
           continue;
-        if (!all_modes && !(edge->forwardaccess() & kAutoAccess))
+        // Keep both directions of any road a car can use in either direction:
+        // reverse searches walk the opposing edges of one-way roads.
+        if (!all_modes && !((edge->forwardaccess() | edge->reverseaccess()) & kAutoAccess))
           continue;
         GraphId edge_id = tile_id;
         edge_id.set_id(i);
