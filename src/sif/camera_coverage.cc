@@ -1,4 +1,7 @@
 #include "sif/camera_coverage.h"
+#include "midgard/logging.h"
+
+#include <boost/property_tree/ptree.hpp>
 
 #include <algorithm>
 #include <bit>
@@ -104,6 +107,26 @@ std::shared_ptr<const CameraCoverage> CameraCoverage::Global() {
 void CameraCoverage::SetGlobal(std::shared_ptr<const CameraCoverage> coverage) {
   std::lock_guard<std::mutex> lock(global_mutex);
   global_coverage = std::move(coverage);
+}
+
+void CameraCoverage::LoadFromConfig(const boost::property_tree::ptree& config) {
+  const auto path = config.get<std::string>("thor.camera_coverage", "");
+  if (path.empty() || Global())
+    return;
+  try {
+    auto coverage = Load(path);
+    const auto expected = config.get<std::string>("thor.camera_coverage_build_id", "");
+    if (!expected.empty() && coverage->build_id() != expected) {
+      LOG_ERROR("Camera coverage " + path + " was built for tiles '" + coverage->build_id() +
+                "', not '" + expected + "': camera options disabled");
+      return;
+    }
+    SetGlobal(coverage);
+    LOG_INFO("Loaded camera coverage " + path + ": " + std::to_string(coverage->camera_count()) +
+             " cameras, build " + coverage->build_id());
+  } catch (const std::exception& e) {
+    LOG_ERROR(std::string("Camera coverage not loaded, camera options disabled: ") + e.what());
+  }
 }
 
 CameraCoverage::Span CameraCoverage::cameras_on(const baldr::GraphId& edge) const {

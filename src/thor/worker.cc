@@ -1,3 +1,4 @@
+#include "sif/camera_coverage.h"
 #include "thor/worker.h"
 #include "midgard/logging.h"
 #include "thor/isochrone.h"
@@ -70,6 +71,7 @@ thor_worker_t::thor_worker_t(const boost::property_tree::ptree& config,
       matcher_factory(config, reader), controller{},
       allow_hierarchy_limits_modifications(
           config.get<bool>("service_limits.hierarchy_limits.allow_modification", false)) {
+  sif::CameraCoverage::LoadFromConfig(config);
 
   // Select the matrix algorithm based on the conf file (defaults to
   // select_optimal if not present)

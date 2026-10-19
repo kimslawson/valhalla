@@ -2,6 +2,8 @@
 
 #include <valhalla/baldr/graphid.h>
 
+#include <boost/property_tree/ptree_fwd.hpp>
+
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -42,6 +44,11 @@ public:
   /// The coverage loaded at startup, or nullptr if none.
   static std::shared_ptr<const CameraCoverage> Global();
   static void SetGlobal(std::shared_ptr<const CameraCoverage> coverage);
+
+  /// Loads thor.camera_coverage once, if configured. If the file is damaged,
+  /// or thor.camera_coverage_build_id is set and doesn't match, nothing is
+  /// loaded and camera options fail (robustness.md R-7).
+  static void LoadFromConfig(const boost::property_tree::ptree& config);
 
   Span cameras_on(const baldr::GraphId& edge) const;
 

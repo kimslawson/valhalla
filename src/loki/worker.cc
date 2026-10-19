@@ -1,3 +1,4 @@
+#include "sif/camera_coverage.h"
 #include "loki/worker.h"
 #include "exceptions.h"
 #include "loki/linear_cost_factors.h"
@@ -308,6 +309,7 @@ loki_worker_t::loki_worker_t(const boost::property_tree::ptree& config,
       candidate_query_(*reader,
                        TileHierarchy::levels().back().tiles.TileSize() / 10.0f,
                        TileHierarchy::levels().back().tiles.TileSize() / 10.0f) {
+  sif::CameraCoverage::LoadFromConfig(config);
 
   bbox_intersection_.reserve(1e5); // TODO: how much memory should we reserve for this?
 
