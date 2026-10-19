@@ -367,6 +367,15 @@ message Costing {
     oneof has_steps_factor {
       float steps_factor = 99;
     }
+
+    // Outis camera coverage (src/sif/camera_coverage.cc). Numbered from 200 so
+    // upstream additions can't collide.
+    oneof has_camera_penalty {
+      float camera_penalty = 200;            // seconds charged on entering a camera's coverage
+    }
+    bool camera_exclude_all = 201;           // refuse every covered edge (zero mode)
+    repeated uint64 camera_exclude = 202;    // refuse edges covered by these cameras (packed OSM ids)
+    repeated uint32 camera_exempt = 203;     // coverage indices exempt for this request; set by thor
   }
 
   oneof has_options {
