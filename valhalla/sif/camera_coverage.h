@@ -51,9 +51,12 @@ public:
   static std::shared_ptr<const CameraCoverage> Global();
   static void SetGlobal(std::shared_ptr<const CameraCoverage> coverage);
 
-  /// Loads thor.camera_coverage once, if configured. If the file is damaged,
-  /// or was built for a different tile set than mjolnir's tiles, nothing is
-  /// loaded and camera options fail (robustness.md R-7).
+  /// Makes the global coverage match thor.camera_coverage. Called whenever a
+  /// worker starts, so an app that downloads new camera data and starts a new
+  /// instance gets it. Unconfigured, damaged, or built for different tiles
+  /// than mjolnir's: the global is cleared and camera options fail
+  /// (robustness.md R-7), never served from stale data. An unchanged file
+  /// that's already loaded is kept.
   static void LoadFromConfig(const boost::property_tree::ptree& config);
 
   /// Identifies a tile set: "osm<dataset_id>-b<build id>", from the tile
@@ -78,6 +81,9 @@ public:
   int64_t index_of(uint64_t packed_id) const;
 
 private:
+  std::string source_;     // path it was loaded from
+  std::string stamp_;      // file size and modification time when loaded
+  std::string tiles_;      // tile set it was checked against
   std::string build_id_;
   std::vector<uint64_t> objects_;
   std::vector<uint64_t> graph_ids_;

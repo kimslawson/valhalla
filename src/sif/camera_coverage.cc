@@ -8,6 +8,7 @@
 #include <bit>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <mutex>
@@ -113,17 +114,34 @@ void CameraCoverage::SetGlobal(std::shared_ptr<const CameraCoverage> coverage) {
 
 void CameraCoverage::LoadFromConfig(const boost::property_tree::ptree& config) {
   const auto path = config.get<std::string>("thor.camera_coverage", "");
-  if (path.empty() || Global())
+  if (path.empty()) {
+    SetGlobal(nullptr);
     return;
+  }
   try {
-    auto coverage = Load(path);
+    std::error_code ec;
+    const auto size = std::filesystem::file_size(path, ec);
+    const auto mtime = std::filesystem::last_write_time(path, ec);
+    const std::string stamp =
+        ec ? "" : std::to_string(size) + ":" + std::to_string(static_cast<long long>(mtime.time_since_epoch().count()));
     baldr::GraphReader reader(config.get_child("mjolnir"));
     const auto tiles = TilesetId(reader);
-    if (tiles.empty() || coverage->build_id() != tiles) {
-      LOG_ERROR("Camera coverage " + path + " was built for tiles '" + coverage->build_id() +
+    if (const auto current = Global();
+        current && !stamp.empty() && current->source_ == path && current->stamp_ == stamp &&
+        current->tiles_ == tiles)
+      return;
+
+    SetGlobal(nullptr); // until the new file is proven good
+    auto loaded = Load(path);
+    if (tiles.empty() || loaded->build_id() != tiles) {
+      LOG_ERROR("Camera coverage " + path + " was built for tiles '" + loaded->build_id() +
                 "', but these tiles are '" + tiles + "': camera options disabled");
       return;
     }
+    auto coverage = std::const_pointer_cast<CameraCoverage>(loaded);
+    coverage->source_ = path;
+    coverage->stamp_ = stamp;
+    coverage->tiles_ = tiles;
     SetGlobal(coverage);
     LOG_INFO("Loaded camera coverage " + path + ": " + std::to_string(coverage->camera_count()) +
              " cameras, build " + coverage->build_id());
