@@ -3,6 +3,9 @@
 //
 //   {"id":123456789,"coords":[[lon,lat],[lon,lat],...]}
 //
+// Shortcut edges (with -s) carry "shortcut":true: they span long stretches of
+// highway, so data keyed to them shouldn't be drawn along their whole shape.
+//
 // The first line identifies the tile set, so data built from these edges can
 // be checked against the tiles it's used with:
 //
@@ -115,7 +118,7 @@ int main(int argc, char* argv[]) {
                         shape[p].lat());
           out << buf;
         }
-        out << "]}\n";
+        out << "]" << (edge->is_shortcut() ? ",\"shortcut\":true" : "") << "}\n";
         ++exported;
       }
       reader.Clear();
