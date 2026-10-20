@@ -262,8 +262,10 @@ void legs(valhalla::Api& api, int route_index, rapidjson::writer_wrapper_t& writ
   auto trip_leg_itr = api.mutable_trip()->mutable_routes(route_index)->mutable_legs()->begin();
   // Outis: with "filters": {"attributes": ["edge.id"], "action": "include"},
   // each leg also lists the edges it travels (GraphId, destination-only,
-  // unpaved), so a client can score and check a route without re-deriving its
-  // edges from the shape, which can drop very short edges.
+  // unpaved, and where each starts and ends in the leg's shape), so a client
+  // can score, check and draw a route without re-deriving its edges from the
+  // shape, which can drop very short edges. Request the edge.* attributes it
+  // needs in the filter.
   const auto& opts = api.options();
   const bool edge_ids = opts.filter_action() == FilterAction::include &&
                         std::find(opts.filter_attributes().begin(), opts.filter_attributes().end(),
@@ -688,6 +690,8 @@ void legs(valhalla::Api& api, int route_index, rapidjson::writer_wrapper_t& writ
         writer("id", static_cast<uint64_t>(node.edge().id()));
         writer("destination_only", node.edge().destination_only());
         writer("unpaved", node.edge().unpaved());
+        writer("begin_shape_index", static_cast<uint64_t>(node.edge().begin_shape_index()));
+        writer("end_shape_index", static_cast<uint64_t>(node.edge().end_shape_index()));
         writer.end_object();
       }
       writer.end_array();
